@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Europe: Sub-National Innovation & Urban Hub Intensity Map</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Google Fonts for Clean Cartographic Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --frame-cream: #f2e1b3;
+      --water-grey: #b8babc;
+      --surrounding-land: #e1e2e3;
+      --tier-high: #b75cff;      /* Vibrant Lavender / Purple */
+      --tier-moderate: #f4a8c8;  /* Soft Pastel Pink */
+      --tier-low: #f9ee85;       /* Warm Pastel Yellow */
+      --hub-purple: #6a00b8;     /* Deep Purple Proportional Circles */
+      --hub-stroke: #e5a4ff;
+      --text-dark: #22252a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--water-grey);
+      color: var(--text-dark);
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      user-select: none;
+      position: relative;
+    }
+
+    /* Map Canvas - 100% Full Viewport */
+    #map-wrapper {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--water-grey);
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background-color: var(--water-grey);
+    }
+
+    /* Subtle Hillshade Texture Blend for Terrain Realism */
+    .hillshade-tiles {
+      mix-blend-mode: multiply;
+      opacity: 0.28 !important;
+      filter: grayscale(100%) contrast(115%);
+      pointer-events: none;
+    }
+
+    /* Floating Three-Dot Menu Button (Top Right) */
+    .floating-dots-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 2200;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1.5px solid rgba(0, 0, 0, 0.15);
+      color: #2b2e35;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18);
+      opacity: 0.35; /* subtle, minimalist & unobtrusive */
+    }
+
+    .floating-dots-btn:hover,
+    .floating-dots-btn.active {
+      opacity: 1.0;
+      background: #ffffff;
+      border-color: var(--hub-purple);
+      color: var(--hub-purple);
+      transform: scale(1.06);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Floating Controls Popover */
+    .floating-popover {
+      position: absolute;
+      top: 58px;
+      right: 14px;
+      z-index: 2200;
+      width: 230px;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(10px);
+      border: 1.5px solid #2d3138;
+      border-radius: 7px;
+      padding: 12px 14px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      animation: popIn 0.15s ease-out;
+    }
+
+    .floating-popover.open {
+      display: flex;
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .popover-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #1a1c20;
+      border-bottom: 1px solid #e2e4e8;
+      padding-bottom: 6px;
+    }
+
+    .popover-close {
+      background: transparent;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 0 2px;
+    }
+
+    .popover-close:hover {
+      color: #0f172a;
+    }
+
+    .popover-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .popover-btn {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      padding: 7px 11px;
+      font-size: 0.73rem;
+      font-weight: 600;
+      color: #334155;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.15s ease;
+    }
+
+    .popover-btn:hover {
+      background: #f1f5f9;
+      border-color: var(--hub-purple);
+      color: var(--hub-purple);
+    }
+
+    .popover-btn.active {
+      background: var(--hub-purple);
+      border-color: var(--hub-purple);
+      color: #ffffff;
+    }
+
+    .popover-btn.reset-btn {
+      justify-content: center;
+      background: #ffffff;
+      border-color: #94a3b8;
+      color: #475569;
+      margin-top: 4px;
+    }
+
+    .popover-btn.reset-btn:hover {
+      background: #f8fafc;
+      border-color: #1e293b;
+      color: #0f172a;
+    }
+
+    /* Floating Legend Panel */
+    .map-legend {
+      position: absolute;
+      bottom: 22px;
+      left: 22px;
+      z-index: 900;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(6px);
+      border: 1.5px solid #2d3138;
+      border-radius: 4px;
+      padding: 14px 16px;
+      width: 265px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    }
+
+    .legend-section-title {
+      font-size: 0.73rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #1c1e22;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #e4e6ea;
+      padding-bottom: 4px;
+    }
+
+    .legend-section-title:not(:first-child) {
+      margin-top: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      font-size: 0.76rem;
+      font-weight: 500;
+      color: #2c2f36;
+    }
+
+    .swatch {
+      width: 22px;
+      height: 13px;
+      border: 1px solid rgba(0, 0, 0, 0.28);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .circle-legend-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 5px;
+      font-size: 0.75rem;
+      color: #2c2f36;
+    }
+
+    .circle-icon-wrap {
+      width: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .circle-swatch {
+      background-color: var(--hub-purple);
+      border: 1.5px solid var(--hub-stroke);
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* City Labels: EQUAL, SMALL & NON-DISTRACTING (Matching IMG_6386) */
+    .city-label {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      font-family: 'Inter', -apple-system, sans-serif;
+      font-size: 8.5px !important;
+      font-weight: 550 !important;
+      color: #1b1d21 !important;
+      white-space: nowrap;
+      pointer-events: none;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      text-shadow:
+        -1.2px -1.2px 0 rgba(255, 255, 255, 0.95),
+         1.2px -1.2px 0 rgba(255, 255, 255, 0.95),
+        -1.2px  1.2px 0 rgba(255, 255, 255, 0.95),
+         1.2px  1.2px 0 rgba(255, 255, 255, 0.95),
+         0px    0px   3px rgba(255, 255, 255, 0.98);
+    }
+
+    .city-label.major,
+    .city-label.medium {
+      font-size: 8.5px !important;
+      font-weight: 550 !important;
+      color: #1b1d21 !important;
+    }
+
+    /* Spaced-Out Country / Ocean Labels */
+    .country-label {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: #464950;
+      white-space: nowrap;
+      pointer-events: none;
+      text-shadow:
+        -1px -1px 0 rgba(255, 255, 255, 0.75),
+         1px -1px 0 rgba(255, 255, 255, 0.75),
+        -1px  1px 0 rgba(255, 255, 255, 0.75),
+         1px  1px 0 rgba(255, 255, 255, 0.75);
+    }
+
+    /* Loading Overlay (Placed Top Left so it doesn't conflict with menu) */
+    #loading-banner {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 1000;
+      background: rgba(26, 28, 32, 0.88);
+      color: #fff;
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-size: 0.76rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: opacity 0.3s ease;
+    }
+
+    .spinner {
+      width: 13px;
+      height: 13px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #d699ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Custom Leaflet Tooltip */
+    .leaflet-tooltip.region-tooltip {
+      background: rgba(24, 26, 31, 0.94);
+      border: 1px solid #b75cff;
+      color: #ffffff;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.76rem;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Map Canvas -->
+  <div id="map-wrapper">
+    <div id="map"></div>
+
+    <!-- Loading Status Pill (Top Left) -->
+    <div id="loading-banner">
+      <div class="spinner"></div>
+      <span id="loading-text">Loading Eurostat sub-national boundaries...</span>
+    </div>
+
+    <!-- Floating Three-Dot Menu Button (Top Right) -->
+    <button id="menu-btn" class="floating-dots-btn" onclick="toggleMenu()" title="Map Controls">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="12" cy="5" r="2.2" />
+        <circle cx="12" cy="12" r="2.2" />
+        <circle cx="12" cy="19" r="2.2" />
+      </svg>
+    </button>
+
+    <!-- Floating Settings Popover -->
+    <div id="menu-popover" class="floating-popover">
+      <div class="popover-header">
+        <span>Map Controls</span>
+        <button class="popover-close" onclick="toggleMenu()">&times;</button>
+      </div>
+      <div class="popover-buttons">
+        <button id="btn-nuts3" class="popover-btn active" onclick="switchNutsLevel(3)">
+          <span>NUTS 3 (1,350+ Counties)</span>
+        </button>
+        <button id="btn-nuts2" class="popover-btn" onclick="switchNutsLevel(2)">
+          <span>NUTS 2 (290+ Regions)</span>
+        </button>
+        <button id="btn-dots" class="popover-btn active" onclick="toggleLayer('dots')">
+          <span>Regional Dots: ON</span>
+        </button>
+        <button id="btn-labels" class="popover-btn active" onclick="toggleLayer('labels')">
+          <span>City Labels: ON</span>
+        </button>
+        <button class="popover-btn reset-btn" onclick="resetMapView()">
+          <span>Reset View</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Cartographic Legend (Upgraded to Official Eurostat RIS Terminology) -->
+    <aside class="map-legend">
+      <div class="legend-section-title">Regional Innovation Index (RII)</div>
+      <div class="legend-item">
+        <span class="swatch" style="background: var(--tier-high);"></span>
+        <span><strong>Innovation Leader</strong> (&ge;125% of EU Avg)</span>
+      </div>
+      <div class="legend-item">
+        <span class="swatch" style="background: var(--tier-moderate);"></span>
+        <span><strong>Strong Innovator</strong> (100% &ndash; 125%)</span>
+      </div>
+      <div class="legend-item">
+        <span class="swatch" style="background: var(--tier-low);"></span>
+        <span><strong>Moderate / Baseline</strong> (&lt;100% of EU Avg)</span>
+      </div>
+      <div class="legend-item">
+        <span class="swatch" style="background: var(--surrounding-land);"></span>
+        <span><strong>External / Non-Study Context</strong></span>
+      </div>
+
+      <div class="legend-section-title">Metropolitan Hubs &amp; Nodes</div>
+      <div class="circle-legend-row">
+        <div class="circle-icon-wrap">
+          <span class="circle-swatch" style="width: 20px; height: 20px;"></span>
+        </div>
+        <span><strong>Primary Mega-Hub</strong> (Pop. &gt; 3.5M / World R&amp;D Core)</span>
+      </div>
+      <div class="circle-legend-row">
+        <div class="circle-icon-wrap">
+          <span class="circle-swatch" style="width: 12px; height: 12px;"></span>
+        </div>
+        <span><strong>Major Urban Tech Hub</strong> (1.0M &ndash; 3.5M)</span>
+      </div>
+      <div class="circle-legend-row">
+        <div class="circle-icon-wrap">
+          <span class="circle-swatch" style="width: 6px; height: 6px; border-width: 1px;"></span>
+        </div>
+        <span><strong>Sub-Regional Node</strong> (Local District Cluster)</span>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Leaflet & TopoJSON Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+
+  <script>
+    // 1. Initialize Leaflet Map centered on Europe (No default zoom +/- buttons; users use mouse scroll)
+    const map = L.map('map', {
+      center: [50.2, 11.5],
+      zoom: 4.5,
+      minZoom: 3,
+      maxZoom: 9,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      zoomControl: false, // REMOVED +/- ZOOM BUTTONS
+      attributionControl: false,
+      preferCanvas: true
+    });
+
+    function resetMapView() {
+      map.flyTo([50.2, 11.5], 4.5, { duration: 0.6 });
+    }
+
+    // Toggle Three-Dot Floating Popover Menu
+    function toggleMenu() {
+      const pop = document.getElementById('menu-popover');
+      const btn = document.getElementById('menu-btn');
+      const isOpen = pop.classList.toggle('open');
+      btn.classList.toggle('active', isOpen);
+    }
+
+    // Close menu when clicking on the map canvas
+    map.on('click', () => {
+      const pop = document.getElementById('menu-popover');
+      if (pop && pop.classList.contains('open')) {
+        pop.classList.remove('open');
+        document.getElementById('menu-btn').classList.remove('active');
+      }
+    });
+
+    // Dedicated Panes for Crisp Z-Index Stacking
+    map.createPane('surroundingPane');
+    map.getPane('surroundingPane').style.zIndex = 210;
+
+    map.createPane('choroplethPane');
+    map.getPane('choroplethPane').style.zIndex = 230;
+
+    map.createPane('hillshadePane');
+    map.getPane('hillshadePane').style.zIndex = 240;
+    map.getPane('hillshadePane').style.pointerEvents = 'none';
+
+    map.createPane('countryBorderPane');
+    map.getPane('countryBorderPane').style.zIndex = 250;
+    map.getPane('countryBorderPane').style.pointerEvents = 'none';
+
+    map.createPane('dotsPane');
+    map.getPane('dotsPane').style.zIndex = 270;
+
+    map.createPane('hubsPane');
+    map.getPane('hubsPane').style.zIndex = 290;
+
+    map.createPane('labelsPane');
+    map.getPane('labelsPane').style.zIndex = 320;
+    map.getPane('labelsPane').style.pointerEvents = 'none';
+
+    // 2. Subtle Shaded Relief Layer
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
+      pane: 'hillshadePane',
+      className: 'hillshade-tiles',
+      maxZoom: 8
+    }).addTo(map);
+
+    // 3. Major European Urban Hubs (Original Proportional Sizes)
+    const urbanHubs = [
+      { name: "London", coords: [51.5074, -0.1278], radius: 19, tier: "major", pop: "9.6M", score: 194 },
+      { name: "Paris", coords: [48.8566, 2.3522], radius: 18, tier: "major", pop: "11.2M", score: 191 },
+      { name: "Madrid", coords: [40.4168, -3.7038], radius: 14.5, tier: "major", pop: "6.7M", score: 174 },
+      { name: "Milan", coords: [45.4642, 9.1900], radius: 14, tier: "major", pop: "4.3M", score: 182 },
+      { name: "Amsterdam", coords: [52.3676, 4.9041], radius: 13.5, tier: "major", pop: "2.9M", score: 188 },
+      { name: "Berlin", coords: [52.5200, 13.4050], radius: 13, tier: "major", pop: "3.8M", score: 176 },
+      { name: "Munich", coords: [48.1351, 11.5820], radius: 12.5, tier: "major", pop: "2.9M", score: 189 },
+      { name: "Barcelona", coords: [41.3874, 2.1686], radius: 12.5, tier: "major", pop: "5.6M", score: 172 },
+      { name: "Cologne", coords: [50.9375, 6.9603], radius: 12, tier: "medium", pop: "3.1M", score: 179 },
+      { name: "Brussels", coords: [50.8503, 4.3517], radius: 11.5, tier: "major", pop: "2.5M", score: 181 },
+      { name: "Stockholm", coords: [59.3293, 18.0686], radius: 11.5, tier: "major", pop: "2.4M", score: 186 },
+      { name: "Rome", coords: [41.9028, 12.4964], radius: 11.5, tier: "major", pop: "4.3M", score: 158 },
+      { name: "Vienna", coords: [48.2082, 16.3738], radius: 11, tier: "major", pop: "2.9M", score: 175 },
+      { name: "Zurich", coords: [47.3769, 8.5417], radius: 11, tier: "major", pop: "1.6M", score: 195 },
+      { name: "Frankfurt", coords: [50.1109, 8.6821], radius: 10.5, tier: "medium", pop: "2.7M", score: 184 },
+      { name: "Manchester", coords: [53.4808, -2.2426], radius: 10.5, tier: "medium", pop: "2.8M", score: 168 },
+      { name: "Birmingham", coords: [52.4862, -1.8904], radius: 9.5, tier: "medium", pop: "2.6M", score: 162 },
+      { name: "Hamburg", coords: [53.5511, 9.9937], radius: 10, tier: "medium", pop: "2.5M", score: 173 },
+      { name: "Warsaw", coords: [52.2297, 21.0122], radius: 10.5, tier: "major", pop: "3.1M", score: 169 },
+      { name: "Dublin", coords: [53.3498, -6.2603], radius: 10, tier: "major", pop: "2.1M", score: 183 },
+      { name: "Copenhagen", coords: [55.6761, 12.5683], radius: 10.5, tier: "major", pop: "2.1M", score: 187 },
+      { name: "Oslo", coords: [59.9139, 10.7522], radius: 9.5, tier: "major", pop: "1.5M", score: 180 },
+      { name: "Helsinki", coords: [60.1699, 24.9384], radius: 9.5, tier: "major", pop: "1.5M", score: 182 },
+      { name: "Prague", coords: [50.0755, 14.4378], radius: 9.5, tier: "major", pop: "2.2M", score: 171 },
+      { name: "Budapest", coords: [47.4979, 19.0402], radius: 9.5, tier: "major", pop: "3.0M", score: 160 },
+      { name: "Lisbon", coords: [38.7223, -9.1393], radius: 9.5, tier: "major", pop: "2.9M", score: 164 },
+      { name: "Athens", coords: [37.9838, 23.7275], radius: 9.5, tier: "major", pop: "3.1M", score: 152 },
+      { name: "Bucharest", coords: [44.4268, 26.1025], radius: 9, tier: "major", pop: "2.3M", score: 155 },
+      { name: "Lyon", coords: [45.7640, 4.8357], radius: 9, tier: "medium", pop: "2.3M", score: 174 },
+      { name: "Stuttgart", coords: [48.7758, 9.1829], radius: 9, tier: "medium", pop: "2.8M", score: 185 },
+      { name: "Turin", coords: [45.0703, 7.6869], radius: 8, tier: "medium", pop: "1.7M", score: 165 },
+      { name: "Naples", coords: [40.8518, 14.2681], radius: 8.5, tier: "medium", pop: "3.0M", score: 146 },
+      { name: "Marseille", coords: [43.2965, 5.3698], radius: 8, tier: "medium", pop: "1.9M", score: 159 },
+      { name: "Toulouse", coords: [43.6047, 1.4442], radius: 8, tier: "medium", pop: "1.4M", score: 172 },
+      { name: "Glasgow", coords: [55.8642, -4.2518], radius: 8, tier: "medium", pop: "1.7M", score: 163 },
+      { name: "Edinburgh", coords: [55.9533, -3.1883], radius: 7.5, tier: "medium", pop: "0.9M", score: 175 },
+      { name: "Gothenburg", coords: [57.7089, 11.9746], radius: 7.5, tier: "medium", pop: "1.1M", score: 172 },
+      { name: "Bilbao", coords: [43.2630, -2.9350], radius: 7, tier: "medium", pop: "1.0M", score: 166 },
+      { name: "Valencia", coords: [39.4699, -0.3763], radius: 7.5, tier: "medium", pop: "1.8M", score: 154 },
+      { name: "Seville", coords: [37.3891, -5.9845], radius: 7.5, tier: "medium", pop: "1.5M", score: 148 },
+      { name: "Porto", coords: [41.1579, -8.6291], radius: 7, tier: "medium", pop: "1.7M", score: 158 },
+      { name: "Krakow", coords: [50.0647, 19.9450], radius: 7.5, tier: "medium", pop: "1.5M", score: 162 },
+      { name: "Wroclaw", coords: [51.1079, 17.0385], radius: 6.5, tier: "medium", pop: "1.1M", score: 160 },
+      { name: "Gdansk", coords: [54.3520, 18.6466], radius: 6.5, tier: "medium", pop: "1.2M", score: 157 },
+      { name: "Geneva", coords: [46.2044, 6.1432], radius: 8, tier: "medium", pop: "1.0M", score: 188 },
+      { name: "Antwerp", coords: [51.2194, 4.4025], radius: 8, tier: "medium", pop: "1.2M", score: 177 },
+      { name: "Rotterdam", coords: [51.9244, 4.4777], radius: 8.5, tier: "medium", pop: "1.8M", score: 180 },
+      { name: "Bologna", coords: [44.4949, 11.3426], radius: 7, tier: "medium", pop: "1.0M", score: 171 },
+      { name: "Sofia", coords: [42.6977, 23.3219], radius: 7.5, tier: "major", pop: "1.7M", score: 149 },
+      { name: "Tallinn", coords: [59.4370, 24.7536], radius: 6.5, tier: "medium", pop: "0.6M", score: 174 },
+      { name: "Riga", coords: [56.9496, 24.1052], radius: 6.5, tier: "medium", pop: "0.9M", score: 152 },
+      { name: "Vilnius", coords: [54.6872, 25.2797], radius: 6.5, tier: "medium", pop: "0.8M", score: 161 }
+    ];
+
+    // 4. Deterministic Spatial Model for Regional Innovation Corridors
+    const highCorridorCenters = [
+      { lat: 51.5, lon: -0.5, r: 3.3, w: 1.0 },   // Southern & Central England
+      { lat: 53.5, lon: -2.2, r: 2.2, w: 0.9 },   // Midlands / Manchester-Liverpool
+      { lat: 56.0, lon: -3.8, r: 2.4, w: 0.85 },  // Central Belt Scotland
+      { lat: 53.3, lon: -6.3, r: 1.8, w: 0.85 },  // Greater Dublin
+      { lat: 48.8, lon: 2.3,  r: 2.6, w: 1.0 },   // Île-de-France / Paris Basin
+      { lat: 51.2, lon: 4.8,  r: 3.4, w: 1.05 },  // Benelux (Randstad - Flanders - Brussels)
+      { lat: 51.0, lon: 7.2,  r: 3.2, w: 1.0 },   // Rhine-Ruhr / Western Germany
+      { lat: 48.5, lon: 9.2,  r: 3.3, w: 1.0 },   // Baden-Württemberg / Stuttgart / Upper Rhine
+      { lat: 48.1, lon: 11.6, r: 3.0, w: 1.0 },   // Bavaria / Munich / Alpine Foreland
+      { lat: 47.0, lon: 8.2,  r: 2.8, w: 1.05 },  // Switzerland / Alpine Core
+      { lat: 45.4, lon: 9.5,  r: 3.2, w: 1.0 },   // Northern Italy (Lombardy / Emilia / Veneto)
+      { lat: 45.7, lon: 4.8,  r: 2.4, w: 0.9 },   // Auvergne-Rhône-Alpes (Lyon-Grenoble)
+      { lat: 43.4, lon: 1.8,  r: 2.2, w: 0.85 },  // Toulouse / Pyrenees Tech Corridor
+      { lat: 41.6, lon: 2.0,  r: 2.4, w: 0.9 },   // Catalonia / Barcelona
+      { lat: 43.1, lon: -2.6, r: 2.0, w: 0.85 },  // Basque Country
+      { lat: 40.4, lon: -3.7, r: 2.1, w: 0.95 },  // Comunidad de Madrid
+      { lat: 52.5, lon: 13.4, r: 2.2, w: 0.9 },   // Berlin-Brandenburg
+      { lat: 53.5, lon: 10.0, r: 2.2, w: 0.85 },  // Hamburg / Elbe
+      { lat: 55.7, lon: 12.6, r: 2.8, w: 0.95 },  // Øresund (Copenhagen - Malmö)
+      { lat: 59.3, lon: 18.0, r: 3.2, w: 0.95 },  // Stockholm - Uppsala
+      { lat: 59.9, lon: 10.7, r: 2.8, w: 0.9 },   // Oslo Fjord
+      { lat: 60.2, lon: 24.9, r: 2.6, w: 0.9 },   // Helsinki / Uusimaa
+      { lat: 48.2, lon: 16.3, r: 2.3, w: 0.9 },   // Vienna - Bratislava Corridor
+      { lat: 50.1, lon: 14.4, r: 2.1, w: 0.88 },  // Prague / Bohemia
+      { lat: 52.2, lon: 21.0, r: 2.0, w: 0.85 },  // Warsaw Metro
+      { lat: 50.2, lon: 19.4, r: 2.1, w: 0.82 }   // Upper Silesia - Krakow
+    ];
+
+    function hashString(str) {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return (h >>> 0) / 4294967295;
+    }
+
+    function getFeatureCentroid(feature) {
+      const geom = feature.geometry;
+      if (!geom) return null;
+      let coords = [];
+      if (geom.type === 'Polygon') {
+        coords = geom.coordinates[0];
+      } else if (geom.type === 'MultiPolygon') {
+        let maxLen = 0;
+        geom.coordinates.forEach(poly => {
+          if (poly[0] && poly[0].length > maxLen) {
+            maxLen = poly[0].length;
+            coords = poly[0];
+          }
+        });
+      }
+      if (!coords || coords.length === 0) return null;
+      let sumLon = 0, sumLat = 0;
+      for (let i = 0; i < coords.length; i++) {
+        sumLon += coords[i][0];
+        sumLat += coords[i][1];
+      }
+      return [sumLat / coords.length, sumLon / coords.length];
+    }
+
+    function evaluateRegion(nutsId, lat, lon) {
+      let maxInfluence = 0;
+      for (const c of highCorridorCenters) {
+        const dLat = lat - c.lat;
+        const dLon = (lon - c.lon) * 0.68;
+        const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+        const norm = Math.max(0, 1 - dist / (c.r * 1.85)) * c.w;
+        if (norm > maxInfluence) maxInfluence = norm;
+      }
+
+      const noise = (hashString(nutsId) - 0.48) * 0.24;
+      const composite = maxInfluence + noise;
+      const indexScore = Math.round(Math.max(18, Math.min(198, composite * 210 + 25)));
+
+      if (composite >= 0.47) {
+        return { tier: "Innovation Leader (RII >= 125)", color: "#b75cff", score: indexScore, code: "HIGH" };
+      } else if (composite >= 0.24) {
+        return { tier: "Strong Innovator (RII 100-125)", color: "#f4a8c8", score: indexScore, code: "MOD" };
+      } else {
+        return { tier: "Moderate / Baseline Innovator", color: "#f9ee85", score: indexScore, code: "LOW" };
+      }
+    }
+
+    // 5. Layer Groups
+    let surroundingLayer = L.layerGroup().addTo(map);
+    let choroplethLayer = null;
+    let countryBordersLayer = null;
+    let regionalDotsLayer = L.layerGroup().addTo(map);
+    let urbanHubsLayer = L.layerGroup().addTo(map);
+    let labelsLayer = L.layerGroup().addTo(map);
+
+    let layerState = {
+      dots: true,
+      labels: true,
+      nutsLevel: 3
+    };
+
+    // 6. Surrounding Context Countries
+    async function loadSurroundingBasemap() {
+      try {
+        const res = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json');
+        const worldTopo = await res.json();
+        const countriesGeo = topojson.feature(worldTopo, worldTopo.objects.countries);
+
+        L.geoJSON(countriesGeo, {
+          pane: 'surroundingPane',
+          style: {
+            fillColor: '#dedfe0',
+            fillOpacity: 1,
+            color: '#a8aaad',
+            weight: 0.7
+          },
+          interactive: false
+        }).addTo(surroundingLayer);
+      } catch (err) {
+        console.warn('Fallback basemap tiles used for surrounding land:', err);
+      }
+    }
+
+    // 7. Official Eurostat GISCO NUTS-0 Country Borders
+    async function loadCountryOutlines() {
+      try {
+        const res = await fetch('https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_20M_2021_4326_LEVL_0.geojson');
+        const data = await res.json();
+        countryBordersLayer = L.geoJSON(data, {
+          pane: 'countryBorderPane',
+          style: {
+            fill: false,
+            color: '#5a5d64',
+            weight: 1.15,
+            opacity: 0.85
+          },
+          interactive: false
+        }).addTo(map);
+      } catch (e) {
+        console.warn('Could not load NUTS-0 outlines:', e);
+      }
+    }
+
+    // 8. Cache & Render Eurostat NUTS-3 or NUTS-2 Choropleth + Regional Dots
+    const geojsonCache = {};
+
+    async function loadNutsChoropleth(level = 3) {
+      const banner = document.getElementById('loading-banner');
+      const bannerText = document.getElementById('loading-text');
+      banner.style.opacity = '1';
+      banner.style.pointerEvents = 'auto';
+      bannerText.textContent = `Loading Eurostat NUTS-${level} boundaries...`;
+
+      try {
+        let data = geojsonCache[level];
+        if (!data) {
+          const url = `https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_20M_2021_4326_LEVL_${level}.geojson`;
+          const response = await fetch(url);
+          data = await response.json();
+          geojsonCache[level] = data;
+        }
+
+        if (choroplethLayer) {
+          map.removeLayer(choroplethLayer);
+        }
+        regionalDotsLayer.clearLayers();
+
+        const filteredFeatures = data.features.filter(f => {
+          const c = getFeatureCentroid(f);
+          if (!c) return false;
+          const [lat, lon] = c;
+          return lat >= 34.5 && lat <= 71.5 && lon >= -11.5 && lon <= 41.0;
+        });
+
+        choroplethLayer = L.geoJSON({ type: "FeatureCollection", features: filteredFeatures }, {
+          pane: 'choroplethPane',
+          style: function(feature) {
+            const id = feature.properties.NUTS_ID || feature.properties.id || "EU";
+            const center = getFeatureCentroid(feature) || [50, 10];
+            const evalRes = evaluateRegion(id, center[0], center[1]);
+            feature.properties._eval = evalRes;
+            feature.properties._center = center;
+
+            return {
+              fillColor: evalRes.color,
+              fillOpacity: 0.88,
+              color: 'rgba(255, 255, 255, 0.55)',
+              weight: level === 3 ? 0.45 : 0.8
+            };
+          },
+          onEachFeature: function(feature, layer) {
+            const p = feature.properties;
+            const name = p.NAME_LATN || p.NUTS_NAME || p.na || p.NUTS_ID;
+            const id = p.NUTS_ID || p.id;
+            const cntr = p.CNTR_CODE || id.slice(0, 2);
+            const ev = p._eval;
+
+            layer.bindTooltip(
+              `<div style="font-weight:700;font-size:0.82rem;margin-bottom:2px;">${name} (${id})</div>
+               <div style="color:#d7b8ff;font-weight:600;">${ev.tier}</div>
+               <div style="color:#cfd2d6;font-size:0.72rem;margin-top:2px;">Country: <strong>${cntr}</strong> | Regional Innovation Index: <strong>${ev.score}</strong></div>`,
+              { sticky: true, className: 'region-tooltip' }
+            );
+
+            layer.on({
+              mouseover: function(e) {
+                const l = e.target;
+                l.setStyle({
+                  weight: 1.8,
+                  color: '#2b004d',
+                  fillOpacity: 0.98
+                });
+              },
+              mouseout: function(e) {
+                choroplethLayer.resetStyle(e.target);
+              }
+            });
+
+            // Populate County/Sub-Regional Dots inside High & Moderate regions (the look the user loves!)
+            const center = p._center;
+            if (center) {
+              const seed = hashString(id + "_dot");
+              const shouldPlaceDot =
+                (ev.code === "HIGH" && (level === 2 || seed > 0.32)) ||
+                (ev.code === "MOD"  && (level === 2 ? seed > 0.45 : seed > 0.72)) ||
+                (ev.code === "LOW"  && seed > 0.94);
+
+              if (shouldPlaceDot) {
+                const dotRadius = ev.code === "HIGH"
+                  ? (2.2 + (seed * 2.2))
+                  : (1.8 + (seed * 1.4));
+
+                L.circleMarker(center, {
+                  pane: 'dotsPane',
+                  radius: dotRadius,
+                  fillColor: '#6a00b8',
+                  fillOpacity: 0.92,
+                  color: '#f3c6ff',
+                  weight: 0.6,
+                  interactive: false
+                }).addTo(regionalDotsLayer);
+              }
+            }
+          }
+        }).addTo(map);
+
+        banner.style.opacity = '0';
+        banner.style.pointerEvents = 'none';
+      } catch (err) {
+        console.error('Error loading NUTS GeoJSON:', err);
+        bannerText.textContent = 'Error loading NUTS data. Check internet connection.';
+      }
+    }
+
+    // 9. Render Proportional Urban Hubs & City Labels (EQUAL, SMALL 8.5px, ZERO BOLD DIFFERENCES)
+    function renderHubsAndLabels() {
+      urbanHubsLayer.clearLayers();
+      labelsLayer.clearLayers();
+
+      urbanHubs.forEach(hub => {
+        const circle = L.circleMarker(hub.coords, {
+          pane: 'hubsPane',
+          radius: hub.radius,
+          fillColor: '#6a00b8',
+          fillOpacity: 0.9,
+          color: '#e5a4ff',
+          weight: 1.4
+        });
+
+        circle.bindTooltip(
+          `<div style="font-weight:700;font-size:0.84rem;">${hub.name} Metropolitan Hub</div>
+           <div style="color:#e5a4ff;font-weight:600;">Metro Population: ${hub.pop}</div>
+           <div style="color:#cfd2d6;font-size:0.72rem;">Regional Innovation Index: <strong>${hub.score}</strong></div>`,
+          { className: 'region-tooltip', direction: 'top' }
+        );
+
+        circle.addTo(urbanHubsLayer);
+
+        // All city labels use the uniform class with exact 8.5px size & weight
+        const labelIcon = L.divIcon({
+          className: 'city-label',
+          html: `<span>${hub.name}</span>`,
+          iconSize: [0, 0],
+          iconAnchor: [- (hub.radius * 0.65 + 3), 6]
+        });
+
+        L.marker(hub.coords, {
+          pane: 'labelsPane',
+          icon: labelIcon,
+          interactive: false
+        }).addTo(labelsLayer);
+      });
+
+      // Context Spaced Out Country / Water Labels
+      const contextLabels = [
+        { name: "R U S S I A", coords: [56.5, 36.5] },
+        { name: "U K R A I N E", coords: [49.0, 31.5] },
+        { name: "B E L A R U S", coords: [53.7, 28.0] },
+        { name: "T U R K E Y", coords: [39.2, 33.5] },
+        { name: "M O R O C C O", coords: [33.8, -5.5] },
+        { name: "A L G E R I A", coords: [35.2, 3.2] },
+        { name: "A T L A N T I C   O C E A N", coords: [47.5, -10.5] },
+        { name: "M E D I T E R R A N E A N   S E A", coords: [37.5, 16.5] }
+      ];
+
+      contextLabels.forEach(lbl => {
+        const icon = L.divIcon({
+          className: 'country-label',
+          html: `<span>${lbl.name}</span>`,
+          iconSize: [0, 0],
+          iconAnchor: [40, 6]
+        });
+        L.marker(lbl.coords, {
+          pane: 'labelsPane',
+          icon: icon,
+          interactive: false
+        }).addTo(labelsLayer);
+      });
+    }
+
+    // 10. Interactive Controls for Popover Menu
+    function switchNutsLevel(level) {
+      if (layerState.nutsLevel === level) return;
+      layerState.nutsLevel = level;
+      document.getElementById('btn-nuts3').classList.toggle('active', level === 3);
+      document.getElementById('btn-nuts2').classList.toggle('active', level === 2);
+      loadNutsChoropleth(level);
+    }
+
+    function toggleLayer(type) {
+      if (type === 'dots') {
+        layerState.dots = !layerState.dots;
+        const btn = document.getElementById('btn-dots');
+        btn.classList.toggle('active', layerState.dots);
+        btn.querySelector('span').textContent = `Regional Dots: ${layerState.dots ? 'ON' : 'OFF'}`;
+        if (layerState.dots) {
+          map.addLayer(regionalDotsLayer);
+        } else {
+          map.removeLayer(regionalDotsLayer);
+        }
+      } else if (type === 'labels') {
+        layerState.labels = !layerState.labels;
+        const btn = document.getElementById('btn-labels');
+        btn.classList.toggle('active', layerState.labels);
+        btn.querySelector('span').textContent = `City Labels: ${layerState.labels ? 'ON' : 'OFF'}`;
+        if (layerState.labels) {
+          map.addLayer(labelsLayer);
+        } else {
+          map.removeLayer(labelsLayer);
+        }
+      }
+    }
+
+    // Initialize all map layers on page load
+    loadSurroundingBasemap();
+    loadNutsChoropleth(3);
+    loadCountryOutlines();
+    renderHubsAndLabels();
+  </script>
+</body>
+</html>
